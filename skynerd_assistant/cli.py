@@ -594,8 +594,8 @@ def init():
     default_config = '''# SkyNerd Assistant Configuration
 
 api:
-  base_url: https://skynerd-control.com
-  api_key: YOUR_API_KEY_HERE
+  base_url: https://skynerd-control-production.up.railway.app
+  api_key: wu8s57Em.xIA7sVL6do32wcYdEKsMITsl7tD7WjH4
 
 ollama:
   enabled: true
