@@ -15,7 +15,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 from .config import Settings, load_settings
-from .state import StateManager
+from .state import StateDB
 from .clients.skynerd import SkyNerdClient
 from .clients.ollama import OllamaClient
 from .monitors.email import EmailMonitor
@@ -47,7 +47,7 @@ class AssistantDaemon:
         self._setup_logging()
 
         self.scheduler: AsyncIOScheduler | None = None
-        self.state: StateManager | None = None
+        self.state: StateDB | None = None
         self.running = False
 
         # Clients
@@ -64,7 +64,7 @@ class AssistantDaemon:
 
     def _setup_logging(self):
         """Configure logging based on settings."""
-        log_level = logging.DEBUG if self.settings.debug else logging.INFO
+        log_level = getattr(logging, self.settings.log_level.upper(), logging.INFO)
         logging.basicConfig(
             level=log_level,
             format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -89,8 +89,8 @@ class AssistantDaemon:
         self.settings.data_dir.mkdir(parents=True, exist_ok=True)
 
         # Initialize state manager
-        self.state = StateManager(self.settings.data_dir / "agent.db")
-        await self.state.initialize()
+        self.state = StateDB(self.settings.db_path)
+        await self.state.connect()
 
         # Initialize clients
         self.skynerd_client = SkyNerdClient(
@@ -155,7 +155,7 @@ class AssistantDaemon:
         # Email monitor
         self.scheduler.add_job(
             self._run_monitor,
-            trigger=IntervalTrigger(minutes=intervals.email_interval_minutes),
+            trigger=IntervalTrigger(minutes=intervals.email_interval),
             args=["email"],
             id="email_monitor",
             name="Email Monitor",
@@ -165,7 +165,7 @@ class AssistantDaemon:
         # Task monitor
         self.scheduler.add_job(
             self._run_monitor,
-            trigger=IntervalTrigger(minutes=intervals.task_interval_minutes),
+            trigger=IntervalTrigger(minutes=intervals.task_interval),
             args=["tasks"],
             id="task_monitor",
             name="Task Monitor",
@@ -175,7 +175,7 @@ class AssistantDaemon:
         # Calendar monitor
         self.scheduler.add_job(
             self._run_monitor,
-            trigger=IntervalTrigger(minutes=intervals.calendar_interval_minutes),
+            trigger=IntervalTrigger(minutes=intervals.calendar_interval),
             args=["calendar"],
             id="calendar_monitor",
             name="Calendar Monitor",
@@ -185,7 +185,7 @@ class AssistantDaemon:
         # Reminder monitor
         self.scheduler.add_job(
             self._run_monitor,
-            trigger=IntervalTrigger(minutes=intervals.reminder_interval_minutes),
+            trigger=IntervalTrigger(minutes=intervals.reminder_interval),
             args=["reminders"],
             id="reminder_monitor",
             name="Reminder Monitor",
@@ -195,7 +195,7 @@ class AssistantDaemon:
         # Voice monitor
         self.scheduler.add_job(
             self._run_monitor,
-            trigger=IntervalTrigger(minutes=intervals.voice_interval_minutes),
+            trigger=IntervalTrigger(minutes=intervals.voice_interval),
             args=["voice"],
             id="voice_monitor",
             name="Voice Monitor",
@@ -246,11 +246,11 @@ class AssistantDaemon:
         self.running = True
 
         logger.info("SkyNerd Assistant daemon started")
-        logger.info(f"Monitoring intervals: email={self.settings.monitors.email_interval_minutes}m, "
-                    f"tasks={self.settings.monitors.task_interval_minutes}m, "
-                    f"calendar={self.settings.monitors.calendar_interval_minutes}m, "
-                    f"reminders={self.settings.monitors.reminder_interval_minutes}m, "
-                    f"voice={self.settings.monitors.voice_interval_minutes}m")
+        logger.info(f"Monitoring intervals: email={self.settings.monitors.email_interval}m, "
+                    f"tasks={self.settings.monitors.task_interval}m, "
+                    f"calendar={self.settings.monitors.calendar_interval}m, "
+                    f"reminders={self.settings.monitors.reminder_interval}m, "
+                    f"voice={self.settings.monitors.voice_interval}m")
 
     async def stop(self):
         """Stop the daemon."""
