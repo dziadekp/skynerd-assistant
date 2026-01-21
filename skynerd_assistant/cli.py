@@ -628,9 +628,11 @@ notifications:
 
 voice:
   enabled: true
-  tts_engine: pyttsx3  # or 'sapi' for Windows, 'polly' for AWS
+  tts_engine: polly  # Options: polly (AWS), sapi (Windows), pyttsx3 (offline)
   voice_rate: 150
   voice_volume: 0.8
+  polly_voice: Matthew  # AWS Polly voice: Matthew, Joanna, Amy, Brian, etc.
+  polly_region: us-east-1
 
 debug: false
 '''
@@ -684,6 +686,8 @@ def listen(
             engine=settings.voice.tts_engine,
             rate=settings.voice.voice_rate,
             volume=settings.voice.voice_volume,
+            polly_voice=settings.voice.polly_voice,
+            polly_region=settings.voice.polly_region,
         )
 
     listener = VoiceListener()

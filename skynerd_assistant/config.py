@@ -88,11 +88,13 @@ class VoiceSettings(BaseSettings):
 
     enabled: bool = Field(default=True, description="Enable voice notifications")
     tts_engine: str = Field(
-        default="pyttsx3",
+        default="polly",
         description="TTS engine: pyttsx3, sapi, polly",
     )
     voice_rate: int = Field(default=150, description="Words per minute")
     voice_volume: float = Field(default=0.8, description="Volume (0.0 to 1.0)")
+    polly_voice: str = Field(default="Matthew", description="AWS Polly voice ID")
+    polly_region: str = Field(default="us-east-1", description="AWS region for Polly")
 
 
 class Settings(BaseSettings):

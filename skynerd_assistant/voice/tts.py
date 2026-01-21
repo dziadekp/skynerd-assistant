@@ -102,6 +102,87 @@ class WindowsSAPITTS(BaseTTS):
         self._apply_settings()
 
 
+class PollyTTS(BaseTTS):
+    """AWS Polly TTS engine (highest quality, requires AWS credentials)."""
+
+    def __init__(
+        self,
+        rate: int = 150,
+        volume: float = 0.8,
+        voice_id: str = "Matthew",
+        region: str = "us-east-1",
+    ):
+        try:
+            import boto3
+            import pygame
+
+            self.polly = boto3.client("polly", region_name=region)
+            self.voice_id = voice_id
+            self._rate = rate
+            self._volume = volume
+
+            # Initialize pygame for audio playback
+            pygame.mixer.init()
+            self._pygame = pygame
+
+            logger.debug(f"Initialized AWS Polly TTS with voice {voice_id}")
+        except Exception as e:
+            logger.error(f"Failed to initialize AWS Polly: {e}")
+            self.polly = None
+            self._pygame = None
+
+    def speak(self, text: str):
+        if not self.polly or not self._pygame:
+            logger.warning("Polly not available")
+            return
+
+        try:
+            import io
+            import tempfile
+
+            # Adjust rate using SSML
+            rate_percent = int((self._rate / 150) * 100)
+            ssml_text = f'<speak><prosody rate="{rate_percent}%">{text}</prosody></speak>'
+
+            # Call Polly
+            response = self.polly.synthesize_speech(
+                Text=ssml_text,
+                TextType="ssml",
+                OutputFormat="mp3",
+                VoiceId=self.voice_id,
+                Engine="neural",  # Use neural voice for higher quality
+            )
+
+            # Play audio
+            audio_stream = response["AudioStream"].read()
+
+            # Save to temp file and play
+            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+                f.write(audio_stream)
+                temp_path = f.name
+
+            self._pygame.mixer.music.load(temp_path)
+            self._pygame.mixer.music.set_volume(self._volume)
+            self._pygame.mixer.music.play()
+
+            # Wait for playback to finish
+            while self._pygame.mixer.music.get_busy():
+                self._pygame.time.wait(100)
+
+            # Cleanup
+            import os
+            os.unlink(temp_path)
+
+        except Exception as e:
+            logger.error(f"Polly speak failed: {e}")
+
+    def set_rate(self, rate: int):
+        self._rate = rate
+
+    def set_volume(self, volume: float):
+        self._volume = volume
+
+
 class TTSEngine:
     """
     Main TTS engine that manages different backends.
@@ -114,15 +195,35 @@ class TTSEngine:
         engine: str = "pyttsx3",
         rate: int = 150,
         volume: float = 0.8,
+        polly_voice: str = "Matthew",
+        polly_region: str = "us-east-1",
     ):
         self.engine_name = engine
         self.rate = rate
         self.volume = volume
+        self.polly_voice = polly_voice
+        self.polly_region = polly_region
         self._engine: BaseTTS | None = None
         self._init_engine()
 
     def _init_engine(self):
         """Initialize the TTS engine."""
+        # Try Polly first if requested
+        if self.engine_name == "polly":
+            try:
+                self._engine = PollyTTS(
+                    self.rate,
+                    self.volume,
+                    voice_id=self.polly_voice,
+                    region=self.polly_region,
+                )
+                if self._engine.polly:
+                    logger.info("Using AWS Polly for TTS")
+                    return
+            except Exception as e:
+                logger.warning(f"AWS Polly not available: {e}")
+
+        # Try Windows SAPI if requested
         if self.engine_name == "sapi" and sys.platform == "win32":
             try:
                 self._engine = WindowsSAPITTS(self.rate, self.volume)
