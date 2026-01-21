@@ -1,0 +1,25 @@
+[Unit]
+Description=SkyNerd Assistant - Local AI personal assistant
+Documentation=https://github.com/skynerd/skynerd-assistant
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Replace with your actual Python path
+ExecStart=/usr/bin/python3 -m skynerd_assistant daemon start -f
+Restart=always
+RestartSec=10
+# Don't restart more than 3 times in 60 seconds
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Environment
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target
