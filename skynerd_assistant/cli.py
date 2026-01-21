@@ -623,7 +623,7 @@ voice:
 debug: false
 '''
 
-    config_file.write_text(default_config)
+    config_file.write_text(default_config, encoding="utf-8")
     console.print(f"[green]✓[/green] Created config file: {config_file}")
     console.print()
     console.print("Next steps:")
