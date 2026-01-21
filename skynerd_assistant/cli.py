@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
+import httpx
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -86,11 +87,22 @@ def chat(
                     model=settings.ollama.model,
                 )
                 try:
+                    await ollama.connect()
+
+                    # Check if Ollama is running
+                    if not await ollama.is_available():
+                        console.print("[red]Ollama is not running or model not found.[/red]")
+                        console.print(f"Start Ollama and run: ollama pull {settings.ollama.model}")
+                        return
+
                     # Stream response
                     console.print(Panel("[bold]Assistant[/bold]"))
                     async for chunk in ollama.chat_stream(prompt):
                         console.print(chunk, end="")
                     console.print()  # Newline at end
+                except httpx.ConnectError:
+                    console.print("[red]Cannot connect to Ollama.[/red]")
+                    console.print("Make sure Ollama is running: ollama serve")
                 except Exception as e:
                     console.print(f"[red]Error:[/red] {e}")
                 finally:
