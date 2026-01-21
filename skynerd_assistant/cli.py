@@ -645,6 +645,137 @@ debug: false
 
 
 # ============================================================================
+# Listen Command (Voice Input)
+# ============================================================================
+
+@app.command()
+def listen(
+    continuous: bool = typer.Option(False, "--continuous", "-c", help="Keep listening for commands"),
+    wake_word: str = typer.Option(None, "--wake", "-w", help="Wake word to trigger (e.g., 'hey skynerd')"),
+):
+    """
+    Listen for voice commands.
+
+    Speak your command and the assistant will execute it.
+
+    Examples:
+        skynerd-assistant listen
+        skynerd-assistant listen --continuous
+        skynerd-assistant listen --continuous --wake "hey skynerd"
+    """
+    try:
+        from .voice.listener import VoiceListener, check_microphone
+        from .voice.tts import TTSEngine
+    except ImportError:
+        console.print("[red]Voice input not available.[/red]")
+        console.print("Install with: pip install SpeechRecognition pyaudio")
+        raise typer.Exit(1)
+
+    if not check_microphone():
+        console.print("[red]No microphone found.[/red]")
+        raise typer.Exit(1)
+
+    settings = get_settings()
+
+    # Initialize TTS for responses
+    tts = None
+    if settings.voice.enabled:
+        tts = TTSEngine(
+            engine=settings.voice.tts_engine,
+            rate=settings.voice.voice_rate,
+            volume=settings.voice.voice_volume,
+        )
+
+    listener = VoiceListener()
+
+    def process_command(text: str):
+        """Process a voice command."""
+        console.print(f"[cyan]You said:[/cyan] {text}")
+
+        # Check for exit commands
+        if text.lower() in ["stop", "exit", "quit", "goodbye"]:
+            console.print("[yellow]Goodbye![/yellow]")
+            if tts:
+                tts.speak("Goodbye!")
+            raise typer.Exit(0)
+
+        # Process the command
+        async def _process():
+            async with SkyNerdClient(settings.api.base_url, settings.api.api_key) as client:
+                text_lower = text.lower()
+
+                # Simple command matching
+                if "email" in text_lower or "mail" in text_lower:
+                    data = await client.get_status()
+                    email = data.get("email", {})
+                    unread = email.get("unread_count", 0)
+                    high = email.get("high_priority_count", 0)
+                    response = f"You have {unread} unread emails"
+                    if high > 0:
+                        response += f", {high} are high priority"
+
+                elif "task" in text_lower or "to do" in text_lower or "todo" in text_lower:
+                    data = await client.get_status()
+                    tasks = data.get("tasks", {})
+                    overdue = tasks.get("overdue_count", 0)
+                    today = tasks.get("due_today_count", 0)
+                    response = f"You have {overdue} overdue tasks and {today} due today"
+
+                elif "schedule" in text_lower or "calendar" in text_lower or "meeting" in text_lower:
+                    data = await client.get_status()
+                    cal = data.get("calendar", {})
+                    events = cal.get("today_count", 0)
+                    next_event = cal.get("next_event", "nothing")
+                    response = f"You have {events} events today. Next up: {next_event}"
+
+                elif "reminder" in text_lower:
+                    data = await client.get_status()
+                    reminders = data.get("reminders", {})
+                    pending = reminders.get("pending_count", 0)
+                    response = f"You have {pending} pending reminders"
+
+                elif "status" in text_lower or "priority" in text_lower or "summary" in text_lower:
+                    data = await client.get_status()
+                    email = data.get("email", {})
+                    tasks = data.get("tasks", {})
+                    cal = data.get("calendar", {})
+                    response = (
+                        f"Here's your summary: "
+                        f"{email.get('unread_count', 0)} unread emails, "
+                        f"{tasks.get('overdue_count', 0)} overdue tasks, "
+                        f"{cal.get('today_count', 0)} events today"
+                    )
+
+                else:
+                    response = "I didn't understand that command. Try asking about emails, tasks, calendar, or status."
+
+                console.print(f"[green]Assistant:[/green] {response}")
+                if tts:
+                    tts.speak(response)
+
+        asyncio.run(_process())
+
+    console.print("[bold]Voice Assistant Ready[/bold]")
+    console.print("Speak your command (say 'stop' to exit)")
+    console.print()
+
+    if continuous:
+        # Keep listening
+        try:
+            listener.listen_continuous(process_command, wake_word=wake_word)
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Stopped listening[/yellow]")
+    else:
+        # Single command
+        console.print("[dim]Listening...[/dim]")
+        text = listener.listen_once()
+        if text:
+            process_command(text)
+        else:
+            console.print("[yellow]Didn't catch that. Try again.[/yellow]")
+
+
+# ============================================================================
 # Entry Point
 # ============================================================================
 
